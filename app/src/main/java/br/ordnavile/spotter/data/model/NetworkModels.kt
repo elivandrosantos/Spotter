@@ -4,7 +4,9 @@ import com.google.gson.annotations.SerializedName
 
 data class GerarPixRequest(
     val placa: String,
-    val valor: Double
+    val valor: Double,
+    val token: String? = null,
+    val chavePix: String? = null
 )
 
 data class GerarPixResponse(

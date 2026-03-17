@@ -1,5 +1,6 @@
 package br.ordnavile.spotter.data.state
 
+import br.ordnavile.spotter.data.model.ConfiguracaoEstacionamento
 import br.ordnavile.spotter.data.model.Veiculo
 
 data class MonilocUiState(
@@ -8,8 +9,27 @@ data class MonilocUiState(
     val errorMessage: String? = null,
     val showLoading: Boolean = false,
     val showAddDialog: Boolean = false,
-    val paymentStatus: PaymentState = PaymentState.Idle
+    val novaPlaca: String = "",
+    val novoModelo: String = "",
+    val paymentStatus: PaymentState = PaymentState.Idle,
+    val configuracao: ConfiguracaoEstacionamento = ConfiguracaoEstacionamento(),
+    val nomeEstacionamentoInput: String = "",
+    val valorPrimeiraHoraInput: String = "",
+    val valorHoraAdicionalInput: String = "",
+    val valorFixo12HorasInput: String = "",
+    val tempoToleranciaInput: String = "",
+    val tokenMpInput: String = "",
+    val chavePixInput: String = "",
+    val showMpTutorial: Boolean = false,
+    val showCompraCreditosDialog: Boolean = false,
+    val quantidadeCreditosInput: String = "100",
+    val currentScreen: Screen = Screen.Home
 )
+
+enum class Screen {
+    Home,
+    Configuracao
+}
 
 sealed class PaymentState {
     object Idle : PaymentState()
@@ -20,5 +40,5 @@ sealed class PaymentState {
         val idPagamento: String,
         val placa: String
     ) : PaymentState()
-    data class Success(val placa: String) : PaymentState()
+    data class Success(val message: String) : PaymentState()
 }

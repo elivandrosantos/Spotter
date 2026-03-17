@@ -25,9 +25,9 @@ class MonilocRepository(
         dao.deletarPorPlaca(placa)
     }
 
-    suspend fun gerarPix(placa: String, valor: Double): Result<GerarPixResponse> = withContext(Dispatchers.IO) {
+    suspend fun gerarPix(placa: String, valor: Double, token: String? = null, chavePix: String? = null): Result<GerarPixResponse> = withContext(Dispatchers.IO) {
         try {
-            val response = api.gerarPix(GerarPixRequest(placa, valor))
+            val response = api.gerarPix(GerarPixRequest(placa, valor, token, chavePix))
             if (response.isSuccessful && response.body() != null) {
                 val body = response.body()!!
                 if (body.idPagamento != null && body.qrCode != null) {
