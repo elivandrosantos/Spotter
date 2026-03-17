@@ -1,6 +1,7 @@
 package br.ordnavile.spotter.data.model
 
 data class ConfiguracaoEstacionamento(
+    val idEstacionamento: String = "",
     val nomeEstacionamento: String = "Meu Estacionamento",
     val valorPrimeiraHora: Double = 10.0,
     val valorHoraAdicional: Double = 5.0,

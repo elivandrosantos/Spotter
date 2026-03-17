@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConfiguracaoScreen(
+    idEstacionamentoInput: String,
     nomeInput: String,
     primeiraHoraInput: String,
     horaAdicionalInput: String,
@@ -26,6 +27,7 @@ fun ConfiguracaoScreen(
     chavePixInput: String,
     saldo: Int,
     showTutorial: Boolean,
+    onIdEstacionamentoChange: (String) -> Unit,
     onNomeChange: (String) -> Unit,
     onPrimeiraHoraChange: (String) -> Unit,
     onHoraAdicionalChange: (String) -> Unit,
@@ -56,6 +58,16 @@ fun ConfiguracaoScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     
+                    OutlinedTextField(
+                        value = idEstacionamentoInput,
+                        onValueChange = onIdEstacionamentoChange,
+                        label = { Text("ID do Estacionamento (Para sincronização)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+
                     OutlinedTextField(
                         value = nomeInput,
                         onValueChange = onNomeChange,

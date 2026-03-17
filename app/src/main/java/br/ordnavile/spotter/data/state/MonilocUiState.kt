@@ -8,11 +8,13 @@ data class MonilocUiState(
     val filtro: String = "",
     val errorMessage: String? = null,
     val showLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val showAddDialog: Boolean = false,
     val novaPlaca: String = "",
     val novoModelo: String = "",
     val paymentStatus: PaymentState = PaymentState.Idle,
     val configuracao: ConfiguracaoEstacionamento = ConfiguracaoEstacionamento(),
+    val idEstacionamentoInput: String = "",
     val nomeEstacionamentoInput: String = "",
     val valorPrimeiraHoraInput: String = "",
     val valorHoraAdicionalInput: String = "",
@@ -28,7 +30,8 @@ data class MonilocUiState(
 
 enum class Screen {
     Home,
-    Configuracao
+    Configuracao,
+    Dashboard
 }
 
 sealed class PaymentState {
@@ -38,7 +41,8 @@ sealed class PaymentState {
         val qrCodeText: String,
         val valor: Double,
         val idPagamento: String,
-        val placa: String
+        val placa: String,
+        val veiculo: Veiculo
     ) : PaymentState()
     data class Success(val message: String) : PaymentState()
 }

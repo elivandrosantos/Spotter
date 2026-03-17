@@ -12,8 +12,18 @@ import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.module
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import com.google.firebase.firestore.FirebaseFirestore
+import android.provider.Settings
 
 val appModule = module {
+
+    // Device ID
+    single { 
+        Settings.Secure.getString(androidContext().contentResolver, Settings.Secure.ANDROID_ID) 
+    }
+
+    // Firebase
+    single { FirebaseFirestore.getInstance() }
 
     // Room Database
     single {
@@ -21,7 +31,7 @@ val appModule = module {
             androidContext(),
             MonilocDatabase::class.java,
             "moniloc_db"
-        ).build()
+        ).fallbackToDestructiveMigration().build()
     }
 
     // Dao
@@ -42,7 +52,7 @@ val appModule = module {
     single { get<Retrofit>().create(MonilocApi::class.java) }
 
     // Repository
-    single { MonilocRepository(get(), get()) }
+    single { MonilocRepository(get(), get(), get(), get()) }
 
     // ViewModel
     viewModel { MonilocViewModel(get()) }

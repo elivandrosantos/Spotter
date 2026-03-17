@@ -3,6 +3,7 @@ package br.ordnavile.spotter.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import br.ordnavile.spotter.data.model.Veiculo
+import br.ordnavile.spotter.data.model.HistoricoVeiculo
 import br.ordnavile.spotter.data.state.MonilocUiState
 import br.ordnavile.spotter.data.state.PaymentState
 import br.ordnavile.spotter.data.repository.MonilocRepository
@@ -12,6 +13,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import br.ordnavile.spotter.data.model.ConfiguracaoEstacionamento
 import br.ordnavile.spotter.data.state.Screen
@@ -31,19 +37,76 @@ class MonilocViewModel(
     private var pollJob: Job? = null
     private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
+    val veiculosFiltrados: StateFlow<List<Veiculo>> = combine(
+        repository.listarTodos(),
+        _uiState
+    ) { lista, state ->
+        if (state.filtro.isBlank()) {
+            lista
+        } else {
+            lista.filter { it.placa.lowercase().contains(state.filtro.lowercase()) }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val historico: StateFlow<List<HistoricoVeiculo>> = repository.listarHistorico()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     init {
-        carregarVeiculos()
+        viewModelScope.launch {
+            // Tenta recuperar dados da nuvem se o banco local estiver vazio (pós limpeza de cache/reinstalação)
+            try {
+                val veiculosLocais = repository.listarTodos().first()
+                if (veiculosLocais.isEmpty()) {
+                    recuperarDadosFirebase()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
-    private fun carregarVeiculos() {
+    private var isRecovering = false
+
+    private fun recuperarDadosFirebase() {
+        if (isRecovering) return
+        val estacionamentoId = uiState.value.configuracao.idEstacionamento
         viewModelScope.launch {
-            val lista = repository.listarTodos()
-            _uiState.update { it.copy(veiculos = lista) }
+            try {
+                isRecovering = true
+                _uiState.update { it.copy(showLoading = true) }
+                
+                val veiculosNuvem = repository.recuperarVeiculosFirestore(estacionamentoId)
+                if (veiculosNuvem.isNotEmpty()) {
+                    repository.inserirVarios(veiculosNuvem)
+                }
+                
+                val historicoNuvem = repository.recuperarHistoricoFirestore(estacionamentoId)
+                if (historicoNuvem.isNotEmpty()) {
+                    repository.inserirVariosHistorico(historicoNuvem)
+                }
+                
+                _uiState.update { it.copy(showLoading = false) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(showLoading = false) }
+                e.printStackTrace()
+            } finally {
+                isRecovering = false
+            }
         }
     }
 
     fun onFiltroChanged(filtro: String) {
-        _uiState.update { it.copy(filtro = filtro) }
+        _uiState.update { it.copy(filtro = filtro.uppercase()) }
+    }
+
+    fun refreshData() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isRefreshing = true) }
+            recuperarDadosFirebase()
+            // Pequeno delay apenas para o indicador visual ser perceptível se a rede for muito rápida
+            delay(500) 
+            _uiState.update { it.copy(isRefreshing = false) }
+        }
     }
 
     fun setErrorMessage(message: String?) {
@@ -55,6 +118,7 @@ class MonilocViewModel(
             if (screen == Screen.Configuracao) {
                 state.copy(
                     currentScreen = screen,
+                    idEstacionamentoInput = state.configuracao.idEstacionamento,
                     nomeEstacionamentoInput = state.configuracao.nomeEstacionamento,
                     valorPrimeiraHoraInput = state.configuracao.valorPrimeiraHora.toString(),
                     valorHoraAdicionalInput = state.configuracao.valorHoraAdicional.toString(),
@@ -67,6 +131,10 @@ class MonilocViewModel(
                 state.copy(currentScreen = screen)
             }
         }
+    }
+
+    fun onIdEstacionamentoInputChanged(id: String) {
+        _uiState.update { it.copy(idEstacionamentoInput = id) }
     }
 
     fun onNomeEstacionamentoInputChanged(nome: String) {
@@ -112,6 +180,7 @@ class MonilocViewModel(
     fun salvarConfiguracao() {
         _uiState.update { state ->
             val novaConfig = state.configuracao.copy(
+                idEstacionamento = state.idEstacionamentoInput,
                 nomeEstacionamento = state.nomeEstacionamentoInput,
                 valorPrimeiraHora = state.valorPrimeiraHoraInput.toDoubleOrNull() ?: state.configuracao.valorPrimeiraHora,
                 valorHoraAdicional = state.valorHoraAdicionalInput.toDoubleOrNull() ?: state.configuracao.valorHoraAdicional,
@@ -133,10 +202,10 @@ class MonilocViewModel(
     }
 
     fun onNovoModeloChanged(modelo: String) {
-        _uiState.update { it.copy(novoModelo = modelo) }
+        _uiState.update { it.copy(novoModelo = modelo.uppercase()) }
     }
 
-    fun registrarEntrada() {
+    fun registrarEntrada(valorFixo: Double? = null) {
         val state = uiState.value
         val placa = state.novaPlaca
         val modelo = state.novoModelo
@@ -149,20 +218,29 @@ class MonilocViewModel(
         }
 
         val horaAtual = timeFormat.format(Date())
-        val novoVeiculo = Veiculo(placa = placa, modelo = modelo, entrada = horaAtual)
         
         viewModelScope.launch {
-            repository.inserir(novoVeiculo)
-            repository.registrarEntradaRemota(novoVeiculo.placa)
+            val existente = repository.buscarPorPlaca(placa)
+            if (existente != null) {
+                setErrorMessage("Este veículo já está no estacionamento!")
+                return@launch
+            }
+
+            // Fechar o diálogo imediatamente para melhor UX
+            setShowAddDialog(false)
+
+            // As operações de rede e banco ocorrem em segundo plano
+            repository.inserir(
+                Veiculo(placa = placa, modelo = modelo, entrada = horaAtual, valorFixo = valorFixo),
+                estacionamentoId = state.configuracao.idEstacionamento
+            )
+            repository.registrarEntradaRemota(placa)
             
             // Debitar Saldo
             val novaConfig = state.configuracao.copy(
                 saldoCreditos = state.configuracao.saldoCreditos - state.configuracao.custoPorEntrada
             )
             _uiState.update { it.copy(configuracao = novaConfig) }
-            
-            carregarVeiculos()
-            setShowAddDialog(false)
         }
     }
 
@@ -179,7 +257,7 @@ class MonilocViewModel(
         val minutos = if (minutosRestantes < 0) 0 else minutosRestantes
         
         val config = uiState.value.configuracao
-        val valorTotal = calcularValor(minutos, config)
+        val valorTotal = veiculo.valorFixo ?: calcularValor(minutos, config)
 
         _uiState.update { it.copy(paymentStatus = PaymentState.Confirm(veiculo, valorTotal)) }
     }
@@ -222,12 +300,13 @@ class MonilocViewModel(
                 token = if (isCredito) null else config.tokenMercadoPago.ifBlank { null },
                 chavePix = if (isCredito) null else config.chavePix.ifBlank { null }
             )
+            val veiculo = (uiState.value.paymentStatus as? PaymentState.Confirm)?.veiculo
             result.onSuccess { response ->
                 _uiState.update {
                     it.copy(
                         showLoading = false,
                         paymentStatus = PaymentState.AwaitingPayment(
-                            response.qrCode!!, valor, response.idPagamento!!.toString(), placa
+                            response.qrCode!!, valor, response.idPagamento!!.toString(), placa, veiculo ?: Veiculo(placa = placa)
                         )
                     )
                 }
@@ -244,11 +323,15 @@ class MonilocViewModel(
         pollJob?.cancel()
         pollJob = viewModelScope.launch {
             while (true) {
-                delay(3000) // 3 seconds
-                val isPago = repository.verificarPagamento(idPagamento)
-                if (isPago) {
-                    processarSucessoPagamento(placa, "Pagamento confirmado! Carro liberado.")
-                    break
+                delay(3000)
+                try {
+                    val isPago = repository.verificarPagamento(idPagamento)
+                    if (isPago) {
+                        processarSucessoPagamento(placa, "Pagamento confirmado! Carro liberado.")
+                        break
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
             }
         }
@@ -265,9 +348,29 @@ class MonilocViewModel(
             _uiState.update { it.copy(configuracao = novaConfig) }
             displayMessage = "Recarga concluída! Adicionado $qtd créditos ao seu saldo.\nValor: R$ ${"%.2f".format(valor)}"
         } else {
-            repository.deletarPorPlaca(placa)
+            // Salvar no Histórico para o fluxo de PIX
+            val payment = uiState.value.paymentStatus
+            val veiculoParaHistorico = when (payment) {
+                is PaymentState.Confirm -> payment.veiculo
+                is PaymentState.AwaitingPayment -> payment.veiculo
+                else -> null
+            }
+            
+            if (veiculoParaHistorico != null) {
+                val historico = HistoricoVeiculo(
+                    placa = veiculoParaHistorico.placa,
+                    modelo = veiculoParaHistorico.modelo,
+                    entrada = veiculoParaHistorico.entrada,
+                    saida = timeFormat.format(Date()),
+                    valorPago = (payment as? PaymentState.Confirm)?.valor 
+                        ?: (payment as? PaymentState.AwaitingPayment)?.valor ?: 0.0
+                )
+                repository.inserirHistorico(historico, uiState.value.configuracao.idEstacionamento)
+            }
         }
-        carregarVeiculos()
+        
+        // Em ambos os casos de sucesso (Crédito ou Carro), deletamos a placa
+        repository.deletarPorPlaca(placa, uiState.value.configuracao.idEstacionamento)
         _uiState.update { it.copy(paymentStatus = PaymentState.Success(displayMessage)) }
     }
 

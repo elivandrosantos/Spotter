@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,6 +24,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.text.toUpperCase
 import androidx.compose.ui.unit.dp
@@ -85,9 +92,15 @@ fun MonilocScreen(
                     icon = { Icon(Icons.Default.Add, contentDescription = "Nova Entrada") }
                 )
                 NavigationBarItem(
+                    selected = uiState.currentScreen == Screen.Dashboard,
+                    onClick = { viewModel.setCurrentScreen(Screen.Dashboard) },
+                    label = { Text("Dashboard") },
+                    icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) }
+                )
+                NavigationBarItem(
                     selected = uiState.currentScreen == Screen.Configuracao,
                     onClick = { viewModel.setCurrentScreen(Screen.Configuracao) },
-                    label = { Text("Configurações") },
+                    label = { Text("Config") },
                     icon = { Icon(Icons.Default.Settings, contentDescription = null) }
                 )
             }
@@ -98,8 +111,17 @@ fun MonilocScreen(
                 Screen.Home -> {
                     HomeScreenContent(uiState = uiState, viewModel = viewModel)
                 }
+                Screen.Dashboard -> {
+                    val historico by viewModel.historico.collectAsStateWithLifecycle()
+                    DashboardScreen(
+                        historico = historico,
+                        isRefreshing = uiState.isRefreshing,
+                        onRefresh = viewModel::refreshData
+                    )
+                }
                 Screen.Configuracao -> {
                     ConfiguracaoScreen(
+                        idEstacionamentoInput = uiState.idEstacionamentoInput,
                         nomeInput = uiState.nomeEstacionamentoInput,
                         primeiraHoraInput = uiState.valorPrimeiraHoraInput,
                         horaAdicionalInput = uiState.valorHoraAdicionalInput,
@@ -109,6 +131,7 @@ fun MonilocScreen(
                         chavePixInput = uiState.chavePixInput,
                         saldo = uiState.configuracao.saldoCreditos,
                         showTutorial = uiState.showMpTutorial,
+                        onIdEstacionamentoChange = viewModel::onIdEstacionamentoInputChanged,
                         onNomeChange = viewModel::onNomeEstacionamentoInputChanged,
                         onPrimeiraHoraChange = viewModel::onValorPrimeiraHoraInputChanged,
                         onHoraAdicionalChange = viewModel::onValorHoraAdicionalInputChanged,
@@ -143,10 +166,11 @@ fun MonilocScreen(
         AddVeiculoDialog(
             placa = uiState.novaPlaca,
             modelo = uiState.novoModelo,
+            valorFixo12h = uiState.configuracao.valorFixo12Horas,
             onPlacaChange = viewModel::onNovaPlacaChanged,
             onModeloChange = viewModel::onNovoModeloChanged,
             onDismiss = { viewModel.setShowAddDialog(false) },
-            onConfirm = viewModel::registrarEntrada
+            onConfirm = { valor -> viewModel.registrarEntrada(valor) }
         )
     }
 
@@ -191,22 +215,31 @@ fun HomeScreenContent(
     uiState: MonilocUiState,
     viewModel: MonilocViewModel
 ) {
-    Column(
-        modifier = Modifier.fillMaxSize()
+    PullToRefreshBox(
+        isRefreshing = uiState.isRefreshing,
+        onRefresh = viewModel::refreshData
     ) {
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+        val keyboardController = LocalSoftwareKeyboardController.current
+        
         OutlinedTextField(
             value = uiState.filtro,
             onValueChange = viewModel::onFiltroChanged,
             label = { Text("Buscar placa...") },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = {
+                keyboardController?.hide()
+            }),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp)
         )
 
-        val filtrados = uiState.veiculos.filter {
-            it.placa.lowercase().contains(uiState.filtro.lowercase())
-        }
+        val filtrados by viewModel.veiculosFiltrados.collectAsStateWithLifecycle()
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -241,6 +274,7 @@ fun HomeScreenContent(
         }
     }
 }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -248,10 +282,11 @@ fun AddVeiculoDialog(
     modifier: Modifier = Modifier,
     placa: String,
     modelo: String,
+    valorFixo12h: Double,
     onPlacaChange: (String) -> Unit,
     onModeloChange: (String) -> Unit,
     onDismiss: () -> Unit,
-    onConfirm: () -> Unit
+    onConfirm: (Double?) -> Unit
 ) {
 
     AlertDialog(
@@ -288,11 +323,24 @@ fun AddVeiculoDialog(
             }
         },
         confirmButton = {
-            Button(
-                onClick = onConfirm,
-                enabled = placa.isNotBlank() && modelo.isNotBlank()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("Confirmar")
+                OutlinedButton(
+                    onClick = { onConfirm(valorFixo12h) },
+                    enabled = placa.isNotBlank() && modelo.isNotBlank(),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Fixo 12h", maxLines = 1)
+                }
+                Button(
+                    onClick = { onConfirm(null) },
+                    enabled = placa.isNotBlank() && modelo.isNotBlank(),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Confirmar", maxLines = 1)
+                }
             }
         },
         dismissButton = {
