@@ -2,44 +2,75 @@ package br.ordnavile.spotter.ui.screens.home
 
 import android.annotation.SuppressLint
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import kotlinx.coroutines.launch
-import br.ordnavile.spotter.data.state.PaymentState
-import br.ordnavile.spotter.viewmodel.MonilocViewModel
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.ui.text.intl.Locale
-import androidx.compose.ui.text.toUpperCase
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import br.ordnavile.spotter.data.model.Veiculo
 import br.ordnavile.spotter.data.state.MonilocUiState
-import br.ordnavile.spotter.utils.QrCodeUtil
+import br.ordnavile.spotter.data.state.PaymentState
 import br.ordnavile.spotter.data.state.Screen
+import br.ordnavile.spotter.utils.QrCodeUtil
+import br.ordnavile.spotter.viewmodel.MonilocViewModel
 import org.koin.androidx.compose.koinViewModel
 
 @SuppressLint("ConfigurationScreenWidthHeight")
@@ -64,13 +95,13 @@ fun MonilocScreen(
                         )
                     }
                 },
-                actions = {
-                    if (uiState.currentScreen == Screen.Configuracao) {
-                        IconButton(onClick = viewModel::salvarConfiguracao) {
-                            Icon(Icons.Default.Check, contentDescription = "Salvar")
-                        }
-                    }
-                },
+//                actions = {
+//                    if (uiState.currentScreen == Screen.Configuracao) {
+//                        IconButton(onClick = viewModel::salvarConfiguracao) {
+//                            Icon(Icons.Default.Check, contentDescription = "Salvar")
+//                        }
+//                    }
+//                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -376,6 +407,8 @@ fun ConfirmExitDialog(modifier: Modifier = Modifier, veiculo: Veiculo, valorTota
 @Composable
 fun PixQrDialog(modifier: Modifier = Modifier, qrCodeText: String, valor: Double, onDismiss: () -> Unit) {
     val bitmap = remember(qrCodeText) { QrCodeUtil.generateQrCode(qrCodeText, 512) }
+    val clipboardManager = LocalClipboardManager.current
+    var copiado by remember { mutableStateOf(false) }
 
     AlertDialog(
         modifier = modifier,
@@ -384,7 +417,9 @@ fun PixQrDialog(modifier: Modifier = Modifier, qrCodeText: String, valor: Double
         text = {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
             ) {
                 Text("Aguardando pagamento...")
                 Spacer(modifier = Modifier.height(16.dp))
@@ -396,6 +431,46 @@ fun PixQrDialog(modifier: Modifier = Modifier, qrCodeText: String, valor: Double
                     )
                 } else {
                     Text("Erro ao gerar QR Code", color = Color.Red)
+                }
+
+                // --- Pix copia e cola ---
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Pix copia e cola:",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = qrCodeText,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = {
+                        clipboardManager.setText(AnnotatedString(qrCodeText))
+                        copiado = true
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ContentCopy,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(if (copiado) "Copiado! ✓" else "Copiar código")
                 }
             }
         },

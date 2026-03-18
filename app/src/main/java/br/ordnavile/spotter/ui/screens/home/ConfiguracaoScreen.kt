@@ -46,6 +46,25 @@ fun ConfiguracaoScreen(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Card de Créditos
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Saldo de Créditos", style = MaterialTheme.typography.titleMedium)
+                    Text("$saldo veículos restantes", style = MaterialTheme.typography.bodyMedium)
+                }
+                Button(onClick = onComprarCreditos) {
+                    Text("Comprar")
+                }
+            }
+        }
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -111,68 +130,50 @@ fun ConfiguracaoScreen(
                 }
             }
 
-            // Card de Créditos
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Saldo de Créditos", style = MaterialTheme.typography.titleMedium)
-                        Text("$saldo veículos restantes", style = MaterialTheme.typography.bodyMedium)
-                    }
-                    Button(onClick = onComprarCreditos) {
-                        Text("Comprar")
-                    }
-                }
-            }
-
-            // Card Mercado Pago
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Integração Mercado Pago",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Configure suas credenciais para receber os pagamentos diretamente na sua conta.",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-
-                    OutlinedTextField(
-                        value = tokenMpInput,
-                        onValueChange = onTokenMpChange,
-                        label = { Text("Production Access Token") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-
-                    OutlinedTextField(
-                        value = chavePixInput,
-                        onValueChange = onChavePixChange,
-                        label = { Text("Chave PIX (Mercado Pago)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-
-                    TextButton(
-                        onClick = { onShowTutorial(true) },
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Text("Como obter meu Token?")
-                    }
-                }
-            }
+//            HorizontalDivider()
+//
+//            // Card Mercado Pago
+//            Card(
+//                modifier = Modifier.fillMaxWidth(),
+//                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+//            ) {
+//                Column(modifier = Modifier.padding(16.dp)) {
+//                    Text(
+//                        text = "Integração Mercado Pago",
+//                        style = MaterialTheme.typography.titleMedium,
+//                        color = MaterialTheme.colorScheme.primary
+//                    )
+//                    Spacer(modifier = Modifier.height(8.dp))
+//                    Text(
+//                        text = "Configure suas credenciais para receber os pagamentos diretamente na sua conta.",
+//                        style = MaterialTheme.typography.bodySmall,
+//                        modifier = Modifier.padding(bottom = 8.dp)
+//                    )
+//
+//                    OutlinedTextField(
+//                        value = tokenMpInput,
+//                        onValueChange = onTokenMpChange,
+//                        label = { Text("Production Access Token") },
+//                        modifier = Modifier.fillMaxWidth(),
+//                        singleLine = true
+//                    )
+//
+//                    OutlinedTextField(
+//                        value = chavePixInput,
+//                        onValueChange = onChavePixChange,
+//                        label = { Text("Chave PIX (Mercado Pago)") },
+//                        modifier = Modifier.fillMaxWidth(),
+//                        singleLine = true
+//                    )
+//
+//                    TextButton(
+//                        onClick = { onShowTutorial(true) },
+//                        modifier = Modifier.align(Alignment.End)
+//                    ) {
+//                        Text("Como obter meu Token?")
+//                    }
+//                }
+//            }
 
             Button(
                 onClick = onSave,
@@ -209,6 +210,7 @@ fun ConfiguracaoScreen(
     }
 }
 
+
 @Composable
 fun ConfigField(
     label: String,
@@ -218,14 +220,53 @@ fun ConfigField(
 ) {
     OutlinedTextField(
         value = value,
-        onValueChange = {
-            if (it.isEmpty() || it.toDoubleOrNull() != null || (isInteger && it.toIntOrNull() != null)) {
-                onValueChange(it)
+        onValueChange = { newValue ->
+            // Troca vírgula por ponto para facilitar a digitação no teclado brasileiro
+            val formattedValue = newValue.replace(',', '.')
+
+            // Valida a entrada em tempo real usando Regex
+            val isValid = if (isInteger) {
+                // Permite apenas números (vazio ou sequência de dígitos)
+                formattedValue.matches(Regex("^\\d*$"))
+            } else {
+                // Permite números, opcionalmente seguidos por um único ponto e mais números
+                // Ex: "", "10", "10.", "10.5", ".5"
+                formattedValue.matches(Regex("^\\d*\\.?\\d*$"))
+            }
+
+            if (isValid) {
+                onValueChange(formattedValue)
             }
         },
         label = { Text(label) },
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        // Exibe o teclado numérico simples ou o decimal dependendo da necessidade
+        keyboardOptions = KeyboardOptions(
+            keyboardType = if (isInteger) KeyboardType.Number else KeyboardType.Decimal
+        ),
         singleLine = true
     )
 }
+
+
+
+//@Composable
+//fun ConfigField(
+//    label: String,
+//    value: String,
+//    onValueChange: (String) -> Unit,
+//    isInteger: Boolean = false
+//) {
+//    OutlinedTextField(
+//        value = value,
+//        onValueChange = {
+//            if (it.isEmpty() || it.toDoubleOrNull() != null || (isInteger && it.toIntOrNull() != null)) {
+//                onValueChange(it)
+//            }
+//        },
+//        label = { Text(label) },
+//        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+//        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+//        singleLine = true
+//    )
+//}

@@ -9,6 +9,6 @@ data class ConfiguracaoEstacionamento(
     val tempoToleranciaMinutos: Int = 15,
     val tokenMercadoPago: String = "",
     val chavePix: String = "",
-    val saldoCreditos: Int = 10, // Saldo inicial cortesia
+    val saldoCreditos: Int = 5, // Saldo inicial cortesia
     val custoPorEntrada: Int = 1
 )
