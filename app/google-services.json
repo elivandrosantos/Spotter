@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "273967045809",
+    "project_id": "spotter-61be6",
+    "storage_bucket": "spotter-61be6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:273967045809:android:8286e2a3af2eef17579690",
+        "android_client_info": {
+          "package_name": "br.ordnavile.spotter"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD_04oFIKBU7UMY1NbDgDmDqprOjKQDVF0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
